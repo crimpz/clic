@@ -1,0 +1,15 @@
+[env]
+
+RUST_LOG="cli_chat=debug"
+
+SERVICE_WEB_FOLDER="web-folder/"
+
+## -- Secrets
+# keys and passwords for local dev only, not encrypted
+
+SERVICE_DB_URL="postgres://app_user:dev_only_pwd@localhost/app_db"
+
+SERVICE_PWD_KEY="1ir49z3i0gjo4Nw6RhqJP0Te3VYNy9uY19sJROJThrq4tujEjkud9Ji0YF70sBAQJO_jpakykTy4zuGKBmvYnQ"
+
+SERVICE_TOKEN_KEY="PqoT5D0IHBKKJ_ams1nP3whNcOjSq70NTaHONXFgjDxxB1LESwGCRVZ0VJhfgXttUHGZ0MRwHK8B9RwGLBrCtg"
+SERVICE_TOKEN_DURATION_SEC="1800" # 30 minutes
