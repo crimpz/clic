@@ -1,20 +1,45 @@
 use super::ParamsForCreate;
-use crate::model::messages::{
-    FriendMessage, Message, MessageToFriend, MessageToRoom, RecentMessage,
-};
 use crate::model::ModelManager;
 use crate::model::Result;
+use crate::model::WsEvent;
+use crate::model::messages::{FriendMessage, Message, MessageToFriend, MessageWithImages};
+use crate::model::user::{User, UserBmc};
 use crate::{ctx::Ctx, model::messages::MessageBmc};
+
+#[derive(serde::Serialize)]
+pub struct MessageResponse {
+    id: i64,
+}
 
 pub async fn send_message(
     ctx: Ctx,
     mm: ModelManager,
-    params: ParamsForCreate<MessageToRoom>,
-) -> Result<i64> {
+    params: ParamsForCreate<Message>,
+) -> Result<MessageResponse> {
     let ParamsForCreate { data } = params;
-    let message = MessageBmc::send_message(&ctx, &mm, data).await?;
+    let message = MessageBmc::send_message(&ctx, &mm, data.clone()).await?;
+    let user: User = UserBmc::get(&ctx, &mm, ctx.user_id()).await?;
+    let username = user.username.clone();
+    let msg = WsEvent::NewRoomMessage {
+        alert_type: "new_message".to_string(),
+        room_id: data.message_room_id,
+        from: username.clone(),
+        content: data.message_text.clone(),
+    };
 
-    Ok(message)
+    let text = serde_json::to_string(&msg);
+
+    tracing::debug!(
+        "Sending websocket message: username = {}, message = {}",
+        &username,
+        &data.message_text
+    );
+
+    mm.ws_broadcast
+        .broadcast_to_room(&username, &data.message_text)
+        .await;
+
+    Ok(MessageResponse { id: message })
 }
 
 pub async fn send_private_message(
@@ -32,18 +57,8 @@ pub async fn get_messages_by_room_id(
     ctx: Ctx,
     mm: ModelManager,
     params: i64,
-) -> Result<Vec<Message>> {
-    let messages = MessageBmc::list_by_room_id(&ctx, &mm, params).await?;
-
-    Ok(messages)
-}
-
-pub async fn get_recent_room_messages_by_id(
-    ctx: Ctx,
-    mm: ModelManager,
-    params: RecentMessage,
-) -> Result<Vec<Message>> {
-    let messages = MessageBmc::get_recent_room_messages_by_id(&ctx, &mm, params).await?;
+) -> Result<Vec<MessageWithImages>> {
+    let messages = MessageBmc::list_with_images_by_room_id(&ctx, &mm, params).await?;
 
     Ok(messages)
 }

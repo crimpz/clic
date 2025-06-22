@@ -1,14 +1,9 @@
 mod dev_db;
-use crate::model::{
-    self,
-    task::{Task, TaskBmc, TaskForCreate},
-    ModelManager,
-};
 use crate::Ctx;
+use crate::model::{self, ModelManager};
 use log::info;
 use tokio::sync::OnceCell;
-// Initialize environment for local development.
-// For early development, will be called from main()
+
 pub async fn init_dev() {
     static INIT: OnceCell<()> = OnceCell::const_new();
 
@@ -32,23 +27,4 @@ pub async fn init_test() -> ModelManager {
         .await;
 
     mm.clone()
-}
-
-pub async fn seed_tasks(ctx: &Ctx, mm: &ModelManager, titles: &[&str]) -> model::Result<Vec<Task>> {
-    let mut tasks = Vec::new();
-
-    for title in titles {
-        let id = TaskBmc::create(
-            ctx,
-            mm,
-            TaskForCreate {
-                title: title.to_string(),
-            },
-        )
-        .await?;
-        let task = TaskBmc::get(ctx, mm, id).await?;
-        tasks.push(task);
-    }
-
-    Ok(tasks)
 }

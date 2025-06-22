@@ -1,22 +1,21 @@
 [package]
 name = "cli_chat"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 serde = { version = "1.0.138", features = ["derive"] }
 serde_json = { version = "1" }
 serde_with = "2"
 bytes = "1"
-axum = { version = "0.6.x", features = ["ws", "macros"] }
-axum-extra = "0.8"
-hyper = { version = "0.14.27", features = ["full"] }
+http = "1.3.1"
+axum = { version = "0.7.5", features = ["ws", "macros"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
 tokio = { version = "1.33", features = ["full"] }
 tokio-postgres = "0.7"
-tower = "0.4.13"
-tower-cookies = "0.9"
-clap = "4.4.6"
-headers = "0.3"
+tower = { version = "0.5.2", features = ["util"] }
+tower-cookies = "0.10.0"
+headers = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 askama = "0.12.1"
@@ -25,14 +24,15 @@ futures = "0.3.28"
 tokio-tungstenite = "0.16"
 env_logger = "0.10"
 log = "0.4"
-tower-http = { version = "0.4", features = ["fs", "trace"] }
+tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 rand = "0.8.5"
 lazy-regex = "2"
 async-trait = "0.1.74"
 strum_macros = "0.24"
-uuid = { version = "1", features = ["v4", "fast-rng"]}
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "postgres", "uuid", "time"]}
+uuid = { version = "1", features = ["v4", "fast-rng", "serde"]}
+sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "postgres", "uuid", "chrono"]}
+cookie = "0.16"
 sqlb = "0.3"
 anyhow = "1.0"
 httpc-test = "0.1.1"
@@ -40,7 +40,7 @@ serial_test = "2"
 hmac = "0.12"
 sha2 = "0.10"
 base64-url = "2"
-tui = "0.19"
-crossterm = "0.25"
-time = "0.3"
+time = "0.3.35"
 chrono = { version = "*", features = ["serde"]}
+hyper = { version ="1.6", features = ["server"]}
+hyper-util = { version = "0.1", features = ["tokio"] }

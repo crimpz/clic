@@ -1,16 +1,18 @@
-use crate::crypt::pwd;
 use crate::crypt::EncryptContent;
+use crate::crypt::pwd;
 use crate::ctx::Ctx;
+use crate::model::ModelManager;
 use crate::model::user::UserBmc;
 use crate::model::user::UserForLogin;
-use crate::model::ModelManager;
-use crate::web::remove_token_cookie;
 use crate::web::{self, Error, Result};
+use crate::web::{generate_web_token, remove_token_cookie};
+use axum::debug_handler;
 use axum::extract::State;
+use axum::response::Json as AxumJson;
 use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower_cookies::Cookies;
 use tracing::debug;
 
@@ -42,15 +44,16 @@ pub fn routes(mm: ModelManager) -> Router {
 async fn api_create_user(
     State(mm): State<ModelManager>,
     Json(payload): Json<CreatePayload>,
-) -> Result<Json<Value>> {
+) -> Result<AxumJson<Value>> {
     debug!("{:<12} - api_create_user_handler", "HANDLER");
     let CreatePayload {
         username,
         pwd: pwd_clear,
     } = payload;
+
     UserBmc::create_user(&mm, &username, &pwd_clear).await?;
 
-    let body = Json(json!({
+    let body = AxumJson(json!({
         "result": {
             "success": true
         }
@@ -62,7 +65,7 @@ async fn api_create_user(
 async fn api_logoff_handler(
     cookies: Cookies,
     Json(payload): Json<LogoffPayload>,
-) -> Result<Json<Value>> {
+) -> Result<AxumJson<Value>> {
     debug!("{:<12} - api_logoff_handler", "HANDLER");
     let should_logoff = payload.logoff;
 
@@ -70,32 +73,35 @@ async fn api_logoff_handler(
         remove_token_cookie(&cookies)?;
     }
 
-    let body = Json(json!({
-    "result": {
-    "logged_off": should_logoff
-    }
+    let body = AxumJson(json!({
+        "result": {
+            "logged_off": should_logoff
+        }
     }));
 
     Ok(body)
 }
 
+#[debug_handler]
 async fn api_login_handler(
     State(mm): State<ModelManager>,
     cookies: Cookies,
     Json(payload): Json<LoginPayload>,
-) -> Result<Json<Value>> {
+) -> Result<AxumJson<Value>> {
     debug!("{:<12} - api_login_handler", "HANDLER");
 
     let LoginPayload {
         username,
         pwd: pwd_clear,
     } = payload;
+
     let root_ctx = Ctx::root_ctx();
 
-    // Get user
+    // Get user details
     let user: UserForLogin = UserBmc::first_by_username(&root_ctx, &mm, &username)
         .await?
         .ok_or(Error::LoginFailUsernameNotFound)?;
+
     let user_id = user.id;
 
     // Validate password
@@ -103,6 +109,7 @@ async fn api_login_handler(
         return Err(Error::LoginFailUserHasNoPwd { user_id });
     };
 
+    // Check if password is valid
     pwd::validate_pwd(
         &EncryptContent {
             salt: user.pwd_salt.to_string(),
@@ -112,12 +119,17 @@ async fn api_login_handler(
     )
     .map_err(|_| Error::LoginFailPwdNotMatching { user_id })?;
 
-    // Set the web token
+    let token = generate_web_token(&user.username, &user.token_salt.to_string())?;
+    let token_str = token.to_string();
+
     web::set_token_cookie(&cookies, &user.username, &user.token_salt.to_string())?;
 
-    let body = Json(json!({
+    let body = AxumJson(json!({
         "result": {
             "success": true,
+            "id": user_id,
+            "username": username,
+            "token": token_str
         }
     }));
 

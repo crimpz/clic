@@ -7,7 +7,7 @@ use crate::{crypt, model, web};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug, Serialize, strum_macros::AsRefStr)]
+#[derive(Clone, Debug, Serialize, strum_macros::AsRefStr)]
 #[serde(tag = "type", content = "data")]
 pub enum Error {
     // RPC
@@ -92,7 +92,7 @@ pub enum ClientError {
 
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
-        debug!("{:<12} - {self:?}", "INTO_RES");
+        debug!("{:<12} - {self:?}", "INTO_RESP");
 
         // Create a placeholder Axum response.
         let mut response = StatusCode::INTERNAL_SERVER_ERROR.into_response();

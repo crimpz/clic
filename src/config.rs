@@ -18,6 +18,7 @@ pub struct Config {
     pub PWD_KEY: Vec<u8>,
     pub TOKEN_KEY: Vec<u8>,
     pub TOKEN_DURATION_SEC: f64,
+    pub TOKEN_SALT: String,
     // Database
     pub DB_URL: String,
     // Web
@@ -29,10 +30,9 @@ impl Config {
         Ok(Config {
             // Encryption
             PWD_KEY: get_env_b64u_as_u8s("SERVICE_PWD_KEY")?,
-
             TOKEN_KEY: get_env_b64u_as_u8s("SERVICE_TOKEN_KEY")?,
             TOKEN_DURATION_SEC: get_env_parse("SERVICE_TOKEN_DURATION_SEC")?,
-
+            TOKEN_SALT: get_env("SERVICE_TOKEN_SALT")?,
             // Database
             DB_URL: get_env("SERVICE_DB_URL")?,
             // Web

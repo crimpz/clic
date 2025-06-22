@@ -19,7 +19,7 @@ pub fn now_utc_plus_sec_str(sec: f64) -> String {
 }
 
 pub fn parse_utc(moment: &str) -> Result<OffsetDateTime> {
-    OffsetDateTime::parse(moment, &Rfc3339).map_err(|_| Error::DateFailParse(moment.to_string()))
+    OffsetDateTime::parse(moment, &Rfc3339).map_err(|_| Error::DateFailParse(()))
 }
 
 pub fn b64u_encode(content: &str) -> String {

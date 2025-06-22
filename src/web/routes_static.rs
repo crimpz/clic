@@ -1,13 +1,15 @@
 use crate::config;
-use axum::handler::HandlerWithoutStateExt;
-use axum::http::StatusCode;
-use axum::routing::{any_service, MethodRouter};
+use axum::{Router, http::StatusCode, response::IntoResponse};
+use tower::service_fn;
 use tower_http::services::ServeDir;
 
-pub fn serve_dir() -> MethodRouter {
-    async fn handle_404() -> (StatusCode, &'static str) {
-        (StatusCode::NOT_FOUND, "Resource not found")
-    }
+pub fn serve_dir() -> Router {
+    let web_root = &config().WEB_FOLDER;
 
-    any_service(ServeDir::new(&config().WEB_FOLDER).not_found_service(handle_404.into_service()))
+    let handle_404 = service_fn(|_req| async {
+        let response = (StatusCode::NOT_FOUND, "Resource not found").into_response();
+        Ok::<_, std::convert::Infallible>(response)
+    });
+
+    Router::new().fallback_service(ServeDir::new(web_root.clone()).not_found_service(handle_404))
 }

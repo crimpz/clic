@@ -4,9 +4,22 @@ use crate::web::mw_auth::{mw_ctx_require, mw_ctx_resolve};
 use crate::web::mw_res_map::mw_response_map;
 use crate::web::routes_static;
 use crate::web::rpc;
-use axum::{middleware, Router};
+use crate::web::upload_images::upload_image;
+use crate::web::websockets::ws_handler;
+use axum::routing::get_service;
+use axum::{
+    Router,
+    http::{HeaderValue, Method},
+    middleware::{from_fn, from_fn_with_state},
+    routing::{get, post},
+    serve,
+};
 use std::net::SocketAddr;
+use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
+use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -24,6 +37,11 @@ pub mod _dev_utils;
 pub use self::error::{Error, Result};
 pub use config::config;
 
+#[derive(Clone)]
+pub struct AppState {
+    pub mm: ModelManager,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -31,28 +49,74 @@ async fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
+    println!("Current working dir: {:?}", std::env::current_dir());
+
     // -- For Dev Only
     _dev_utils::init_dev().await;
 
     let mm = ModelManager::new().await?;
-    let routes_rpc = rpc::routes(mm.clone()).route_layer(middleware::from_fn(mw_ctx_require));
+    let state = AppState {
+        mm: mm.clone().into(),
+    };
+
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+        .allow_credentials(true)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([axum::http::header::CONTENT_TYPE]);
+
+    let login_routes = web::routes_login::routes(state.mm.clone());
+
+    let routes_rpc = rpc::routes(state.mm.clone()).layer(
+        ServiceBuilder::new()
+            .layer(from_fn_with_state(state.mm.clone(), mw_ctx_require))
+            .layer(CookieManagerLayer::new()),
+    );
+
+    let images = Router::new()
+        .nest_service("/uploads", get_service(ServeDir::new("uploads")))
+        .with_state(state.clone())
+        .layer(
+            ServiceBuilder::new()
+                .layer(from_fn_with_state(state.mm.clone(), mw_ctx_resolve))
+                .layer(CookieManagerLayer::new()),
+        );
+
+    let image_uploads = Router::new()
+        .route("/upload_image", post(upload_image))
+        .with_state(state.clone())
+        .layer(
+            ServiceBuilder::new()
+                .layer(from_fn_with_state(state.mm.clone(), mw_ctx_resolve))
+                .layer(CookieManagerLayer::new()),
+        );
+
+    let ws_route = Router::new()
+        .route("/ws", get(ws_handler))
+        .with_state(state.mm.clone())
+        .layer(
+            ServiceBuilder::new()
+                .layer(from_fn_with_state(state.mm.clone(), mw_ctx_resolve))
+                .layer(CookieManagerLayer::new()),
+        );
 
     let routes_all = Router::new()
-        .merge(web::routes_login::routes(mm.clone()))
+        .merge(login_routes)
         .nest("/api", routes_rpc)
-        .layer(middleware::map_response(mw_response_map))
-        .layer(middleware::from_fn_with_state(mm.clone(), mw_ctx_resolve))
+        .merge(ws_route)
+        .merge(image_uploads)
+        .merge(images)
+        .layer(from_fn(mw_response_map))
+        .layer(from_fn_with_state(state.mm.clone(), mw_ctx_resolve))
         .layer(CookieManagerLayer::new())
+        .layer(cors)
         .fallback_service(routes_static::serve_dir());
 
-    // Start server
-    // Address that server will bind to.
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    info!("{:<12} - {addr}\n", "LISTENING");
-    axum::Server::bind(&addr)
-        .serve(routes_all.into_make_service())
-        .await
-        .unwrap();
+    info!("{:<12} - Listening on http://{}", "LISTENING", addr);
+
+    let listener = TcpListener::bind(addr).await;
+    let _ = serve(listener.expect("REASON"), routes_all).await;
 
     Ok(())
 }

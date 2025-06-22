@@ -1,45 +1,45 @@
-use crate::crypt::token::{validate_web_token, Token};
+use super::set_token_cookie;
+use crate::crypt::token::{Token, validate_web_token};
 use crate::ctx::Ctx;
-use crate::model::user::{UserBmc, UserForAuth};
 use crate::model::ModelManager;
+use crate::model::user::{UserBmc, UserForAuth};
 use crate::web::AUTH_TOKEN;
 use crate::web::{Error, Result};
 use async_trait::async_trait;
 use axum::extract::{FromRequestParts, State};
-use axum::http::request::Parts;
 use axum::http::Request;
+use axum::http::request::Parts;
 use axum::middleware::Next;
 use axum::response::Response;
+use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use tower_cookies::{Cookie, Cookies};
 use tracing::debug;
 
-use super::set_token_cookie;
-
-pub async fn mw_ctx_require<B>(
+pub async fn mw_ctx_require(
     ctx: Result<Ctx>,
-    req: Request<B>,
-    next: Next<B>,
+    req: Request<axum::body::Body>,
+    next: Next,
 ) -> Result<Response> {
     debug!("{:<12} - mw_ctx_require - {ctx:?}", "MIDDLEWARE");
-
     ctx?;
-
-    Ok(next.run(req).await)
+    let response = next.run(req).await;
+    Ok(response)
 }
 
-pub async fn mw_ctx_resolve<B>(
-    mm: State<ModelManager>,
+pub async fn mw_ctx_resolve(
+    State(mm): State<ModelManager>,
     cookies: Cookies,
-    mut req: Request<B>,
-    next: Next<B>,
+    mut req: Request<axum::body::Body>,
+    next: Next,
 ) -> Result<Response> {
     debug!("{:<12} - mw_ctx_resolve", "MIDDLEWARE");
 
-    let ctx_ext_result = _ctx_resolve(mm, &cookies).await;
+    let ctx_ext_result = _ctx_resolve(State(mm), &cookies).await;
+    tracing::debug!("mw_ctx_resolve - ctx result: {:?}", ctx_ext_result);
 
     if ctx_ext_result.is_err() && !matches!(ctx_ext_result, Err(CtxExtError::TokenNotInCookie)) {
-        cookies.remove(Cookie::named(AUTH_TOKEN))
+        cookies.remove(Cookie::from(AUTH_TOKEN))
     }
 
     // Store ctx_ext_result in the request extension for ctx extractor
@@ -48,6 +48,7 @@ pub async fn mw_ctx_resolve<B>(
 }
 
 async fn _ctx_resolve(mm: State<ModelManager>, cookies: &Cookies) -> CtxExtResult {
+    tracing::debug!("ctx_resolve - cookies: {:?}", cookies);
     // Get token string
     let token = cookies
         .get(AUTH_TOKEN)
@@ -56,6 +57,8 @@ async fn _ctx_resolve(mm: State<ModelManager>, cookies: &Cookies) -> CtxExtResul
 
     // Parse token
     let token: Token = token.parse().map_err(|_| CtxExtError::TokenWrongFormat)?;
+
+    tracing::debug!("ctx_resolve - token parse result: {:?}", token);
 
     // Get UserForAuth
     let user: UserForAuth = UserBmc::first_by_username(&Ctx::root_ctx(), &mm, &token.ident)
@@ -68,9 +71,17 @@ async fn _ctx_resolve(mm: State<ModelManager>, cookies: &Cookies) -> CtxExtResul
         .map_err(|_| CtxExtError::FailValidate)?;
 
     // Update Token
-    set_token_cookie(cookies, &user.username, &user.token_salt.to_string())
-        .map_err(|_| CtxExtError::CannotSetTokenCookie)?;
+    let exp_dt: DateTime<Utc> = token.exp.parse().map_err(|_| CtxExtError::FailValidate)?;
+    let now = Utc::now();
 
+    let time_remaining = exp_dt - now;
+
+    if time_remaining < Duration::seconds(30) {
+        set_token_cookie(cookies, &user.username, &user.token_salt.to_string())
+            .map_err(|_| CtxExtError::CannotSetTokenCookie)?;
+    }
+
+    tracing::debug!("ctx_resolver completed");
     // Create CtxExtResult
     Ctx::new(user.id).map_err(|ex| CtxExtError::CtxCreateFail(ex.to_string()))
 }

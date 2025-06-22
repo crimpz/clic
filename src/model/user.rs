@@ -1,20 +1,25 @@
-use crate::crypt::pwd;
 use crate::crypt::EncryptContent;
+use crate::crypt::pwd;
 use crate::ctx::Ctx;
-use crate::model::base::{self, DbBmc};
 use crate::model::ModelManager;
 use crate::model::Result;
+use crate::model::base::{self, DbBmc};
 use crate::web::rpc::ParamsForCreate;
 use serde::{Deserialize, Serialize};
 use sqlb::{Fields, HasFields};
-use sqlx::postgres::PgRow;
 use sqlx::FromRow;
 use sqlx::Row;
+use sqlx::postgres::PgRow;
 use uuid::Uuid;
 
 #[derive(Clone, Fields, FromRow, Debug, Serialize)]
 pub struct User {
     pub id: i64,
+    pub username: String,
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct UsernameOnly {
     pub username: String,
 }
 
@@ -26,8 +31,8 @@ pub struct UserForCreate {
 
 #[derive(Deserialize, Fields)]
 pub struct Friendship {
-    pub user1_name: String,
-    pub user2_name: String,
+    pub user1_id: i64,
+    pub user2_id: i64,
 }
 
 #[derive(Fields)]
@@ -60,7 +65,7 @@ pub struct UserForAuth {
 
 #[derive(FromRow, Fields, Deserialize)]
 pub struct FriendForCreate {
-    pub name: String,
+    pub id: i64,
 }
 
 pub trait UserBy: HasFields + for<'r> FromRow<'r, PgRow> + Unpin + Send {}
@@ -82,6 +87,23 @@ impl UserBmc {
         E: UserBy,
     {
         base::get::<Self, _>(ctx, mm, id).await
+    }
+
+    pub async fn find_username_by_id(
+        _ctx: Ctx,
+        mm: ModelManager,
+        id: i64,
+    ) -> Result<Option<UsernameOnly>> {
+        let db = mm.db();
+
+        let username = sqlb::select()
+            .table(Self::TABLE)
+            .columns(&["username"])
+            .and_where("id", "=", id)
+            .fetch_optional::<_, UsernameOnly>(db)
+            .await?;
+
+        Ok(username)
     }
 
     pub async fn first_by_username<E>(
@@ -135,13 +157,10 @@ impl UserBmc {
         let db = mm.db();
 
         let user: User = Self::get(&ctx, &mm, ctx.user_id()).await?;
-        let friend: User = UserBmc::first_by_username(&ctx, &mm, &data.name)
-            .await?
-            .unwrap();
 
         let friendship = Friendship {
-            user1_name: user.username,
-            user2_name: friend.username,
+            user1_id: user.id,
+            user2_id: data.id,
         };
 
         sqlb::insert()
@@ -158,14 +177,18 @@ impl UserBmc {
 
         let user: User = Self::get(&ctx, &mm, ctx.user_id()).await?;
 
-        let rows = sqlx::query("SELECT DISTINCT user2_name FROM friends WHERE user1_name = $1")
-            .bind(&user.username)
+        let rows = sqlx::query("SELECT DISTINCT user2_id FROM friends WHRE user1_id= $1")
+            .bind(&user.id)
             .fetch_all(db)
             .await?;
 
         let mut usernames = Vec::new();
         for row in rows {
-            if let Ok(username) = row.try_get::<String, _>("user2_name") {
+            if let Ok(username) = row.try_get::<String, _>("user2_id") {
+                let _rows = sqlx::query("SELECT user2_id FROM users")
+                    .bind(&user.username)
+                    .fetch_all(db)
+                    .await?;
                 usernames.push(username);
             }
         }

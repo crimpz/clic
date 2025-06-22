@@ -1,33 +1,33 @@
+use crate::mw_ctx_require;
 use crate::{
     ctx::Ctx,
-    model::user::*,
     model::ModelManager,
+    model::user::*,
     web::{
+        Error, Result,
         rpc::message_rpc::{
-            get_messages_by_room_id, get_private_messages, get_recent_room_messages_by_id,
-            send_message, send_private_message,
+            get_messages_by_room_id, get_private_messages, send_message, send_private_message,
         },
         rpc::room_rpc::{create_room, delete_room, list_rooms, update_room},
-        Error, Result,
     },
 };
-use axum::{extract::State, Json};
+
+use axum::{Json, extract::State};
 use axum::{
+    Router,
+    middleware::from_fn,
     response::{IntoResponse, Response},
     routing::post,
-    Router,
 };
 use log::debug;
 use serde::Deserialize;
-use serde_json::{from_value, json, to_value, Value};
+use serde_json::{Value, from_value, json, to_value};
 
 mod message_rpc;
 mod room_rpc;
-mod task_rpc;
 
 #[derive(Deserialize)]
 struct RpcRequest {
-    id: Option<Value>,
     method: String,
     params: Option<Value>,
 }
@@ -52,6 +52,7 @@ pub fn routes(mm: ModelManager) -> Router {
     Router::new()
         .route("/rpc", post(rpc_handler))
         .with_state(mm)
+        .route_layer(from_fn(mw_ctx_require))
 }
 
 async fn rpc_handler(
@@ -60,7 +61,6 @@ async fn rpc_handler(
     Json(rpc_req): Json<RpcRequest>,
 ) -> Response {
     let rpc_info = RpcInfo {
-        id: rpc_req.id.clone(),
         method: rpc_req.method.clone(),
     };
 
@@ -70,9 +70,8 @@ async fn rpc_handler(
     res
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RpcInfo {
-    pub id: Option<Value>,
     pub method: String,
 }
 
@@ -97,13 +96,15 @@ macro_rules! exec_rpc_fn {
 }
 async fn _rpc_handler(ctx: Ctx, mm: ModelManager, rpc_req: RpcRequest) -> Result<Json<Value>> {
     let RpcRequest {
-        id: rpc_id,
         method: rpc_method,
         params: rpc_params,
     } = rpc_req;
-    debug!("{:12} - _rpc_handler - method: {rpc_method}", "HANDLER");
+    debug!("{:12} - rpc_handler - method: {rpc_method}", "HANDLER");
 
     let result_json: Value = match rpc_method.as_str() {
+        // Audio RPC methods
+        //"get_audio_room" => exec_rpc_fn!(get_audio_room_info, ctx, mm, rpc_params),
+
         // Room RPC methods
         "create_room" => exec_rpc_fn!(create_room, ctx, mm, rpc_params),
         "list_rooms" => exec_rpc_fn!(list_rooms, ctx, mm),
@@ -112,9 +113,6 @@ async fn _rpc_handler(ctx: Ctx, mm: ModelManager, rpc_req: RpcRequest) -> Result
 
         // Message RPC methods
         "get_messages_by_room_id" => exec_rpc_fn!(get_messages_by_room_id, ctx, mm, rpc_params),
-        "get_recent_room_messages_by_id" => {
-            exec_rpc_fn!(get_recent_room_messages_by_id, ctx, mm, rpc_params)
-        }
         "send_message" => exec_rpc_fn!(send_message, ctx, mm, rpc_params),
         "send_private_message" => exec_rpc_fn!(send_private_message, ctx, mm, rpc_params),
         "get_private_messages" => exec_rpc_fn!(get_private_messages, ctx, mm, rpc_params),
@@ -122,13 +120,13 @@ async fn _rpc_handler(ctx: Ctx, mm: ModelManager, rpc_req: RpcRequest) -> Result
         // User RPC methods
         "add_friend" => exec_rpc_fn!(UserBmc::add_friend, ctx, mm, rpc_params),
         "get_friends" => exec_rpc_fn!(UserBmc::get_friends, ctx, mm),
+        "find_by_id" => exec_rpc_fn!(UserBmc::find_username_by_id, ctx, mm, rpc_params),
 
         // Fallback as Err
         _ => return Err(Error::RpcMethodUnknown(rpc_method)),
     };
 
     let body_response = json!({
-    "id": rpc_id,
     "result": result_json
     });
 

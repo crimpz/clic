@@ -2,11 +2,12 @@ use crate::crypt;
 use crate::model::store;
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
+use std::sync::Arc;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[serde_as]
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Error {
     // -- Modules
     EntityNotFound { entity: &'static str, id: i64 },
@@ -15,7 +16,7 @@ pub enum Error {
     Crypt(crypt::Error),
 
     // -- Externals
-    Sqlx(#[serde_as(as = "DisplayFromStr")] sqlx::Error),
+    Sqlx(#[serde_as(as = "DisplayFromStr")] Arc<sqlx::Error>),
 }
 
 impl From<crypt::Error> for Error {
@@ -26,7 +27,7 @@ impl From<crypt::Error> for Error {
 
 impl From<sqlx::Error> for Error {
     fn from(val: sqlx::Error) -> Self {
-        Self::Sqlx(val)
+        Self::Sqlx(Arc::new(val))
     }
 }
 
