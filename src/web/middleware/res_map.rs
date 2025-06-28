@@ -1,7 +1,6 @@
 use crate::ctx::Ctx;
 use crate::log::log_request;
-use crate::web;
-use crate::web::rpc::RpcInfo;
+use crate::web::{error::Error, rpc::RpcInfo};
 use axum::{
     Json,
     body::Body,
@@ -20,15 +19,13 @@ pub async fn mw_response_map(req: Request<Body>, next: Next) -> Response {
     let uri = req.uri().clone();
     let method = req.method().clone();
 
-    // Run the request
     let mut res = next.run(req).await;
 
     let rpc_info = res.extensions().get::<RpcInfo>().cloned();
     let ctx = res.extensions().get::<Ctx>().cloned();
-    let web_error = res.extensions().get::<web::Error>().cloned();
+    let web_error = res.extensions().get::<Error>().cloned();
     let client_status_error = web_error.as_ref().map(|se| se.client_status_and_error());
 
-    // If client error, build a new response
     if let Some((status_code, client_error)) = &client_status_error {
         let client_error_value = to_value(client_error).ok();
         let message = client_error_value.as_ref().and_then(|v| v.get("message"));
@@ -51,7 +48,6 @@ pub async fn mw_response_map(req: Request<Body>, next: Next) -> Response {
 
     let client_error = client_status_error.unzip().1;
 
-    // log the server log line
     let _ = log_request(
         uuid,
         method,

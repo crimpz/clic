@@ -1,8 +1,8 @@
 use crate::ctx::Ctx;
 use crate::model::ModelManager;
-use crate::web::mw_auth::{mw_ctx_require, mw_ctx_resolve};
-use crate::web::mw_res_map::mw_response_map;
-use crate::web::routes_static;
+use crate::web::middleware::auth::{mw_ctx_require, mw_ctx_resolve};
+use crate::web::middleware::res_map::mw_response_map;
+use crate::web::routes::{login::routes, r#static};
 use crate::web::rpc;
 use crate::web::upload_images::upload_image;
 use crate::web::websockets::ws_handler;
@@ -31,7 +31,7 @@ mod error;
 mod log;
 mod model;
 mod utils;
-mod web;
+pub mod web;
 
 pub mod _dev_utils;
 pub use self::error::{Error, Result};
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([axum::http::header::CONTENT_TYPE]);
 
-    let login_routes = web::routes_login::routes(state.mm.clone());
+    let login_routes = routes(state.mm.clone());
 
     let routes_rpc = rpc::routes(state.mm.clone()).layer(
         ServiceBuilder::new()
@@ -110,7 +110,7 @@ async fn main() -> Result<()> {
         .layer(from_fn_with_state(state.mm.clone(), mw_ctx_resolve))
         .layer(CookieManagerLayer::new())
         .layer(cors)
-        .fallback_service(routes_static::serve_dir());
+        .fallback_service(r#static::serve_dir());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     info!("{:<12} - Listening on http://{}", "LISTENING", addr);

@@ -4,11 +4,12 @@ use crate::{
     model::ModelManager,
     model::user::*,
     web::{
-        Error, Result,
-        rpc::message_rpc::{
+        error::{Error, Result},
+        rpc::message::{
             get_messages_by_room_id, get_private_messages, send_message, send_private_message,
         },
-        rpc::room_rpc::{create_room, delete_room, list_rooms, update_room},
+        rpc::room::{create_room, delete_room, list_rooms, update_room},
+        rpc::voice::join_voice,
     },
 };
 
@@ -23,8 +24,9 @@ use log::debug;
 use serde::Deserialize;
 use serde_json::{Value, from_value, json, to_value};
 
-mod message_rpc;
-mod room_rpc;
+mod message;
+mod room;
+mod voice;
 
 #[derive(Deserialize)]
 struct RpcRequest {
@@ -102,8 +104,9 @@ async fn _rpc_handler(ctx: Ctx, mm: ModelManager, rpc_req: RpcRequest) -> Result
     debug!("{:12} - rpc_handler - method: {rpc_method}", "HANDLER");
 
     let result_json: Value = match rpc_method.as_str() {
-        // Audio RPC methods
+        // Voice RPC methods
         //"get_audio_room" => exec_rpc_fn!(get_audio_room_info, ctx, mm, rpc_params),
+        "join_voice" => exec_rpc_fn!(join_voice, ctx, mm, rpc_params),
 
         // Room RPC methods
         "create_room" => exec_rpc_fn!(create_room, ctx, mm, rpc_params),

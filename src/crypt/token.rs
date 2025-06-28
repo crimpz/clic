@@ -4,7 +4,7 @@ use crate::utils::{b64u_decode, b64u_encode, now_utc, now_utc_plus_sec_str, pars
 use std::fmt::Display;
 use std::str::FromStr;
 
-use super::{encrypt_into_b64u, EncryptContent};
+use super::{EncryptContent, encrypt_into_b64u};
 
 #[derive(Debug)]
 pub struct Token {
@@ -57,13 +57,10 @@ pub fn validate_web_token(origin_token: &Token, salt: &str) -> Result<()> {
     Ok(())
 }
 
-// Private functions
 fn _generate_token(ident: &str, duration_sec: f64, salt: &str, key: &[u8]) -> Result<Token> {
-    // Compute first two components
     let ident = ident.to_string();
     let exp = now_utc_plus_sec_str(duration_sec);
 
-    // Sign first two components
     let sign_b64u = _token_sign_into_b64u(&ident, &exp, salt, key)?;
 
     Ok(Token {
@@ -74,14 +71,12 @@ fn _generate_token(ident: &str, duration_sec: f64, salt: &str, key: &[u8]) -> Re
 }
 
 fn _validate_token_sign_and_exp(origin_token: &Token, salt: &str, key: &[u8]) -> Result<()> {
-    // Validate signature
     let new_sign_b64u = _token_sign_into_b64u(&origin_token.ident, &origin_token.exp, salt, key)?;
 
     if new_sign_b64u != origin_token.sign_b64u {
         return Err(Error::TokenSignatureNotMatching);
     }
 
-    // Validate expiration
     let origin_exp = parse_utc(&origin_token.exp).map_err(|_| Error::TokenExpNotIso)?;
     let now = now_utc();
 
@@ -105,7 +100,6 @@ fn _token_sign_into_b64u(ident: &str, exp: &str, salt: &str, key: &[u8]) -> Resu
 }
 
 // Tests
-
 #[cfg(test)]
 mod tests {
     use std::{thread, time::Duration};

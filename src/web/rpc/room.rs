@@ -1,6 +1,6 @@
 use crate::model::ModelManager;
 use crate::model::room::{Room, RoomCreate, RoomUpdate};
-use crate::web::Result;
+use crate::web::error::Result;
 use crate::{ctx::Ctx, model::room::RoomBmc};
 
 use super::{ParamsForCreate, ParamsForUpdate, ParamsIded};

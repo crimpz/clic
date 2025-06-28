@@ -20,8 +20,8 @@ pub async fn send_message(
     let message = MessageBmc::send_message(&ctx, &mm, data.clone()).await?;
     let user: User = UserBmc::get(&ctx, &mm, ctx.user_id()).await?;
     let username = user.username.clone();
+
     let msg = WsEvent::NewRoomMessage {
-        alert_type: "new_message".to_string(),
         room_id: data.message_room_id,
         from: username.clone(),
         content: data.message_text.clone(),

@@ -66,7 +66,6 @@ pub async fn upload_image(
     let new_filename = format!("{}.{}", uuid, ext);
     let storage_path = format!("uploads/images/{}", new_filename);
 
-    // Save file
     let mut file = tokio::fs::File::create(&storage_path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -80,7 +79,6 @@ pub async fn upload_image(
         &storage_path
     );
 
-    // Insert into DB
     sqlx::query(
         r#"
         INSERT INTO images (id, message_id, user_id, filename, content_type, storage_path)

@@ -1,11 +1,12 @@
 use crate::crypt::EncryptContent;
 use crate::crypt::pwd;
+use crate::crypt::token::generate_web_token;
 use crate::ctx::Ctx;
 use crate::model::ModelManager;
 use crate::model::user::UserBmc;
 use crate::model::user::UserForLogin;
-use crate::web::{self, Error, Result};
-use crate::web::{generate_web_token, remove_token_cookie};
+use crate::web::error::{Error, Result};
+use crate::web::middleware::{remove_token_cookie, set_token_cookie};
 use axum::debug_handler;
 use axum::extract::State;
 use axum::response::Json as AxumJson;
@@ -97,19 +98,16 @@ async fn api_login_handler(
 
     let root_ctx = Ctx::root_ctx();
 
-    // Get user details
     let user: UserForLogin = UserBmc::first_by_username(&root_ctx, &mm, &username)
         .await?
         .ok_or(Error::LoginFailUsernameNotFound)?;
 
     let user_id = user.id;
 
-    // Validate password
     let Some(pwd) = user.pwd else {
         return Err(Error::LoginFailUserHasNoPwd { user_id });
     };
 
-    // Check if password is valid
     pwd::validate_pwd(
         &EncryptContent {
             salt: user.pwd_salt.to_string(),
@@ -122,7 +120,7 @@ async fn api_login_handler(
     let token = generate_web_token(&user.username, &user.token_salt.to_string())?;
     let token_str = token.to_string();
 
-    web::set_token_cookie(&cookies, &user.username, &user.token_salt.to_string())?;
+    set_token_cookie(&cookies, &user.username, &user.token_salt.to_string())?;
 
     let body = AxumJson(json!({
         "result": {

@@ -1,7 +1,7 @@
 use crate::Result;
 use crate::ctx::Ctx;
+use crate::web::error::{ClientError, Error};
 use crate::web::rpc::RpcInfo;
-use crate::web::{self, ClientError};
 use hyper::{Method, Uri};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -39,7 +39,7 @@ pub async fn log_request(
     uri: Uri,
     rpc_info: Option<&RpcInfo>,
     ctx: Option<Ctx>,
-    web_error: Option<&web::Error>,
+    web_error: Option<&Error>,
     client_error: Option<ClientError>,
 ) -> Result<()> {
     let timestamp = SystemTime::now()

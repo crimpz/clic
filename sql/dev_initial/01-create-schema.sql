@@ -30,6 +30,13 @@ CREATE TABLE messages
     FOREIGN KEY (message_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE room_participants (
+    room_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    joined_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (room_id, user_id)
+);
+
 -- Images
 CREATE TABLE images (
     id UUID PRIMARY KEY,

@@ -1,9 +1,8 @@
+use crate::{crypt, model, web};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use tracing::debug;
-
-use crate::{crypt, model, web};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -21,7 +20,7 @@ pub enum Error {
 
     FailedToGetMessageByRoomId,
     //CtxExtError
-    CtxExt(web::mw_auth::CtxExtError),
+    CtxExt(web::middleware::auth::CtxExtError),
 
     //Model Errors
     Model(model::Error),
@@ -54,7 +53,7 @@ impl From<serde_json::Error> for Error {
 
 impl Error {
     pub fn client_status_and_error(&self) -> (StatusCode, ClientError) {
-        use web::Error::*;
+        use Error::*;
         #[allow(unreachable_patterns)]
         match self {
             // Login
